@@ -118,47 +118,47 @@ const userRating = getUserRatingForAlbum(item.id);
 const averageRating = averageRatings[item.id];
 console.log(`Rendering album ${item.id} with average rating:`, averageRating); // Debug log
 return (
-<View>
-<TouchableOpacity onPress={() => handleAlbumPress(item.id)}>
-    <View style={styles.albumContainer}>
-    <Image source={{ uri: item.images[0].url }} style={styles.albumImage} />
-    <View style={styles.albumInfo}>
-        <Text style={styles.albumName}>{item.name}</Text>
-        <Text style={styles.albumYear}>{item.release_date.split('-')[0]}</Text>
-        {averageRating !== undefined && (
-        <Text style={styles.communityRating}>Community Rating: {averageRating ? averageRating.toFixed(1) : "N/A"}</Text>
+<View style={styles.albumRow}>
+    <View style={styles.albumColumn}>
+        <TouchableOpacity onPress={() => handleAlbumPress(item.id)}>
+            <View style={styles.albumContainer}>
+                <Image source={{ uri: item.images[0].url }} style={styles.albumImage} />
+                <View style={styles.albumInfo}>
+                    <Text style={styles.albumName}>{item.name}</Text>
+                    <Text style={styles.albumYear}>{item.release_date.split('-')[0]}</Text>
+                </View>
+            </View>
+        </TouchableOpacity>
+        {selectedAlbum === item.id && (
+            <FlatList
+                data={tracks}
+                renderItem={renderTrack}
+                keyExtractor={(item) => item.id}
+                style={styles.trackList}
+            />
         )}
     </View>
-    {!userRating && (
-        <TouchableOpacity style={styles.addButton} onPress={() => { /* Placeholder for future implementation */ }}>
-        <Ionicons name="add-circle-outline" size={24} color="white" />
-        </TouchableOpacity>
-    )}
+    <View style={styles.ratingColumn}>
+        {userRating && (
+            <View style={styles.ratingContainer}>
+                <View style={styles.starPicker}>
+                    {[1, 2, 3, 4, 5].map((star) => (
+                        <FontAwesome
+                            key={star}
+                            name="star"
+                            size={14}
+                            color={star <= userRating ? "yellow" : "gray"}
+                        />
+                    ))}
+                </View>
+            </View>
+        )}
     </View>
-</TouchableOpacity>
-{userRating && (
-    <View style={styles.ratingContainer}>
-    <Text style={styles.ratingText}>Your Rating:</Text>
-    <View style={styles.starPicker}>
-        {[1, 2, 3, 4, 5].map((star) => (
-        <FontAwesome
-            key={star}
-            name="star"
-            size={14}
-            color={star <= userRating ? "yellow" : "gray"}
-        />
-        ))}
+    <View style={styles.communityRatingColumn}>
+        {averageRating !== undefined && (
+            <Text style={styles.communityRating}>{averageRating ? averageRating.toFixed(1) : "N/A"}</Text>
+        )}
     </View>
-    </View>
-)}
-{selectedAlbum === item.id && (
-    <FlatList
-    data={tracks}
-    renderItem={renderTrack}
-    keyExtractor={(item) => item.id}
-    style={styles.trackList}
-    />
-)}
 </View>
 );
 };
@@ -238,7 +238,14 @@ return (
 <View style={styles.profileContainer}>
 <Text style={styles.title}>{artistName}</Text>
 {selectedTab === "Profile" && (
-    <FlatList data={albums} renderItem={renderAlbum} keyExtractor={(item) => item.id} />
+    <>
+        <View style={styles.headerRow}>
+            <Text style={styles.columnHeader}>Albums/Tracks</Text>
+            <Text style={styles.columnHeader}>Your Rating</Text>
+            <Text style={styles.columnHeader}>Community Rating</Text>
+        </View>
+        <FlatList data={albums} renderItem={renderAlbum} keyExtractor={(item) => item.id} />
+    </>
 )}
 {selectedTab === "Review" && (
     <FlatList
@@ -305,10 +312,37 @@ fontSize: 24,
 fontWeight: "bold",
 marginBottom: 10,
 },
+headerRow: {
+flexDirection: "row",
+justifyContent: "space-between",
+marginBottom: 10,
+},
+albumRow: {
+flexDirection: "row",
+alignItems: "flex-start",
+marginBottom: 10,
+},
+albumColumn: {
+flex: 2,
+},
+ratingColumn: {
+flex: 1,
+alignItems: "center",
+},
+communityRatingColumn: {
+flex: 1,
+alignItems: "center",
+},
+columnHeader: {
+color: "lightgray",
+fontSize: 14,
+fontWeight: "bold",
+marginBottom: 5,
+marginHorizontal: 10,
+},
 albumContainer: {
 flexDirection: "row",
 alignItems: "center",
-marginBottom: 10,
 },
 albumImage: {
 width: 60,
@@ -379,7 +413,7 @@ trackList: {
 marginTop: 5,
 },
 ratingContainer: {
-flexDirection: "row",
+flexDirection: "column",
 alignItems: "center",
 marginTop: 5,
 },

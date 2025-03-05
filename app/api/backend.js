@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_GATEWAY_URL = "http://192.168.1.23:8765";
+const API_GATEWAY_URL = "http://172.20.10.2:8765";
 
 const searchPeople = async (username) => {
   try {
@@ -26,7 +26,7 @@ const searchPeople = async (username) => {
 const getUserProfile = async (id) => {
   try {
     const response = await axios.get(
-      `${API_GATEWAY_URL}/profile-api/get-all-profiles`
+      `${API_GATEWAY_URL}/profile-api/get-user-profile/${id}`
     );
     console.log("✅ Fetch User Profile Response:", response.data);
     return response.data;
