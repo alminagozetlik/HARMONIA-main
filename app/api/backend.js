@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_GATEWAY_URL = "http://172.20.10.2:8765";
+const API_GATEWAY_URL = "http://192.168.1.20:8765";
 
 const searchPeople = async (username) => {
   try {
@@ -107,6 +107,46 @@ const getAverageRating = async (spotifyId) => {
   }
 };
 
+const isReviewLikedByUser = async (reviewId, userId) => {
+  try {
+    const response = await axios.get(`${API_GATEWAY_URL}/review-like/${reviewId}/is-liked/${userId}`);
+    return response.data;
+  } catch (error) {
+    console.error("❌ Error checking if review is liked:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+const likeReview = async (reviewId) => {
+  try {
+    const response = await axios.post(`${API_GATEWAY_URL}/review-like/like`, { reviewId, userId: 4 });
+    return response.data;
+  } catch (error) {
+    console.error("❌ Error liking review:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+const unlikeReview = async (reviewId) => {
+  try {
+    const response = await axios.delete(`${API_GATEWAY_URL}/review-like/unlike/${reviewId}`);
+    return response.data;
+  } catch (error) {
+    console.error("❌ Error unliking review:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
+const getLikeCount = async (reviewId) => {
+  try {
+    const response = await axios.get(`${API_GATEWAY_URL}/review-like/${reviewId}/count`);
+    return response.data;
+  } catch (error) {
+    console.error("❌ Error getting like count:", error.response?.data || error.message);
+    throw error;
+  }
+};
+
 export {
   searchPeople,
   getUserProfile,
@@ -114,4 +154,8 @@ export {
   getReviewsByAlbumIds,
   getUserReview,
   getAverageRating,
+  isReviewLikedByUser,
+  likeReview,
+  unlikeReview,
+  getLikeCount,
 };
