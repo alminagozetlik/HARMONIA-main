@@ -5,7 +5,10 @@ import { saveAlbumRating, getAlbumRating, getReviewsByAlbumIds, getUserProfile, 
 import { FontAwesome, Ionicons } from "@expo/vector-icons";
 import { Swipeable, GestureHandlerRootView } from "react-native-gesture-handler";
 
+const API_GATEWAY_URL = "http://192.168.1.23:8765";
+
 const { width } = Dimensions.get("window");
+
 
 export default function ArtistProfile({ artistName, artistImage, artistId, onBack }) {
 const [albums, setAlbums] = useState([]);
@@ -19,143 +22,223 @@ const [selectedTab, setSelectedTab] = useState("Profile");
 const [selectedAlbum, setSelectedAlbum] = useState(null);
 const [tracks, setTracks] = useState([]);
 const [averageRatings, setAverageRatings] = useState({});
+const [likeCounts, setLikeCounts] = useState({}); // Add this line to define likeCounts state
 
 const userId = 4; // Hardcoded userId for the current user
 
 useEffect(() => {
 const fetchAlbums = async () => {
-    try {
-    const albumsData = await getArtistAlbums(artistId);
-    setAlbums(albumsData);
-    fetchAverageRatings(albumsData);
-    } catch (error) {
-    console.error("Error fetching albums:", error);
-    }
+try {
+const albumsData = await getArtistAlbums(artistId);
+setAlbums(albumsData);
+fetchAverageRatings(albumsData);
+} catch (error) {
+console.error("Error fetching albums:", error);
+}
 };
 
+
+
 const fetchAverageRatings = async (albums) => {
-    try {
-    const ratingsData = {};
-    for (const album of albums) {
-        const averageRating = await getAverageRating(album.id);
-        console.log(`Average rating for album ${album.id}:`, averageRating); // Debug log
-        ratingsData[album.id] = averageRating;
-    }
-    setAverageRatings(ratingsData);
-    } catch (error) {
-    console.error("Error fetching average ratings:", error);
-    }
+try {
+const ratingsData = {};
+for (const album of albums) {
+    const averageRating = await getAverageRating(album.id);
+    console.log(`Average rating for album ${album.id}:`, averageRating); // Debug log
+    ratingsData[album.id] = averageRating;
+}
+setAverageRatings(ratingsData);
+} catch (error) {
+console.error("Error fetching average ratings:", error);
+}
 };
 
 fetchAlbums();
 }, [artistId]);
 
 const fetchReviews = useCallback(async () => {
-try {
-    setLoading(true);
-    const albumIds = albums.map((album) => album.id);
-    const reviewsData = await getReviewsByAlbumIds(albumIds);
-    setReviews(reviewsData);
-    fetchUsernames(reviewsData);
-    fetchLikedReviews(reviewsData);
-} catch (error) {
-    console.error("Error fetching reviews:", error);
-} finally {
-    setLoading(false);
-    setRefreshing(false);
-}
+    try {
+        setLoading(true);
+        const albumIds = albums.map((album) => album.id);
+        const reviewsData = await getReviewsByAlbumIds(albumIds);
+        setReviews(reviewsData);
+
+        await fetchLikeCounts(reviewsData);
+        await fetchLikedReviews(reviewsData); // Yeni fonksiyon eklendi
+        fetchUsernames(reviewsData);
+    } catch (error) {
+        console.error("Error fetching reviews:", error);
+    } finally {
+        setLoading(false);
+        setRefreshing(false);
+    }
 }, [albums]);
+
 
 useEffect(() => {
 if (selectedTab === "Review") {
-    fetchReviews();
+fetchReviews();
 }
 }, [selectedTab, fetchReviews]);
 
+const fetchLikedReviews = async (reviewsData) => {
+    let likedReviewsData = {};
+
+    await Promise.all(
+        reviewsData.map(async (review) => {
+            try {
+                const url = `${API_GATEWAY_URL}/review-like/${review.id}/is-liked/${userId}`;
+                console.log(`🔍 Fetching liked status from: ${url}`);
+
+                const response = await fetch(url);
+
+                if (!response.ok) {
+                    console.error(`❌ API Error for review ${review.id}:`, response.status, response.statusText);
+                    likedReviewsData[review.id] = null;
+                    return;
+                }
+
+                const text = await response.text();
+                if (!text) {
+                    console.warn(`⚠️ Empty response for review ${review.id}`);
+                    likedReviewsData[review.id] = null;
+                    return;
+                }
+
+                const data = JSON.parse(text);
+
+                // 🔥 Eğer `data.id` null ise, bu review beğenilmemiş demektir
+                likedReviewsData[review.id] = data.id ? data.id : null;
+            } catch (error) {
+                console.error(`❌ Error fetching liked status for review ${review.id}:`, error);
+                likedReviewsData[review.id] = null;
+            }
+        })
+    );
+
+    setLikedReviews(likedReviewsData);
+};
+
+
+
+
+
+const fetchLikeCounts = async (reviewsData) => {
+    let likeCountsData = {};
+
+    await Promise.all(
+        reviewsData.map(async (review) => {
+            try {
+                const response = await fetch(`${API_GATEWAY_URL}/review-like/${review.id}/count`);
+                const data = await response.json();
+                likeCountsData[review.id] = data.success ? data.data : 0;
+            } catch (error) {
+                console.error(`Error fetching like count for review ${review.id}:`, error);
+                likeCountsData[review.id] = 0;
+            }
+        })
+    );
+
+    setLikeCounts(likeCountsData);
+};
+
+
 const fetchUsernames = async (reviews) => {
 try {
-    const usernamesData = {};
-    for (const review of reviews) {
-    const userProfile = await getUserProfile(review.userId);
-    usernamesData[review.userId] = userProfile.username;
-    }
-    setUsernames(usernamesData);
+const usernamesData = {};
+for (const review of reviews) {
+const userProfile = await getUserProfile(review.userId);
+usernamesData[review.userId] = userProfile.username;
+}
+setUsernames(usernamesData);
 } catch (error) {
-    console.error("Error fetching usernames:", error);
+console.error("Error fetching usernames:", error);
 }
 };
 
-const fetchLikedReviews = async (reviews) => {
-try {
-    const likedReviewsData = {};
-    for (const review of reviews) {
-    const response = await isReviewLikedByUser(review.id, userId);
-    likedReviewsData[review.id] = response.liked;
-    }
-    setLikedReviews(likedReviewsData);
-} catch (error) {
-    console.error("Error fetching liked reviews:", error);
-}
-};
+
 
 const fetchAlbumTracks = async (albumId) => {
 try {
-    const tracksData = await getAlbumTracks(albumId);
-    setTracks(tracksData);
+const tracksData = await getAlbumTracks(albumId);
+setTracks(tracksData);
 } catch (error) {
-    console.error("Error fetching album tracks:", error);
+console.error("Error fetching album tracks:", error);
 }
 };
 
 const handleAlbumPress = (albumId) => {
 if (selectedAlbum === albumId) {
-    setSelectedAlbum(null);
-    setTracks([]);
+setSelectedAlbum(null);
+setTracks([]);
 } else {
-    setSelectedAlbum(albumId);
-    fetchAlbumTracks(albumId);
+setSelectedAlbum(albumId);
+fetchAlbumTracks(albumId);
 }
 };
 
 const toggleLike = async (reviewId) => {
-try {
-    setLikedReviews((prev) => ({
-    ...prev,
-    [reviewId]: !prev[reviewId], // Anında UI güncellemesi
-    }));
+    const likeId = likedReviews[reviewId];
 
-    if (likedReviews[reviewId]) {
-    const response = await unlikeReview(reviewId);
-    if (response.status !== 200) {
-        setLikedReviews((prev) => ({
-        ...prev,
-        [reviewId]: true, // Eğer hata olursa eski duruma getir
-        }));
-        if (response.status === 404) {
-        console.error("❌ Error unliking review: Like not found.");
+    try {
+        if (likeId) {
+            // Unlike işlemi
+            const response = await fetch(`${API_GATEWAY_URL}/review-like/unlike/${likeId}`, {
+                method: "DELETE",
+                headers: { "Content-Type": "application/json" },
+            });
+
+            if (response.ok) {
+                setLikedReviews((prev) => ({ ...prev, [reviewId]: null }));
+                setLikeCounts((prev) => ({
+                    ...prev,
+                    [reviewId]: Math.max((prev[reviewId] || 1) - 1, 0),
+                }));
+
+                await fetchReviews(); // 🔥 Refresh işlemi
+            } else {
+                console.error("Unlike işlemi başarısız:", await response.json());
+            }
         } else {
-        console.error("❌ Error unliking review:", response.data.message);
+            // Like işlemi
+            const response = await fetch(`${API_GATEWAY_URL}/review-like/like`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ userId, reviewId }),
+            });
+
+            const data = await response.json();
+            console.log("✅ Like işlemi response:", data); // API yanıtını logla
+
+            if (response.ok || data.success) { // 🔥 Backend yanlış response dönse bile başarı say
+                setLikedReviews((prev) => ({ ...prev, [reviewId]: data.data || true }));
+                setLikeCounts((prev) => ({
+                    ...prev,
+                    [reviewId]: (prev[reviewId] || 0) + 1,
+                }));
+
+                await fetchReviews(); // 🔥 Refresh işlemi
+            } else {
+
+            }
         }
+    } catch (error) {
+        console.error("Like/Unlike işlemi sırasında hata oluştu:", error);
+    }finally {
+        setRefreshing(true); // 🔥 Refresh tetikle
     }
-    } else {
-    const response = await likeReview(reviewId);
-    if (response.status !== 200) {
-        setLikedReviews((prev) => ({
-        ...prev,
-        [reviewId]: false, // Eğer hata olursa eski duruma getir
-        }));
-        if (response.status === 500) {
-        console.error("❌ Error liking review: Internal Server Error while adding the like.");
-        } else {
-        console.error("❌ Error liking review:", response.data.message);
-        }
-    }
-    }
-} catch (error) {
-    console.error("Error toggling like:", error);
-    Alert.alert("Error", "Something went wrong. Please try again.");
-}
+
 };
+
+useEffect(() => {
+    if (refreshing) {
+        fetchReviews().then(() => setRefreshing(false)); // 🔥 Refresh tamamlanınca sıfırla
+    }
+}, [refreshing]);
+
+
+
+
 
 const getUserRatingForAlbum = (albumId) => {
 const userReview = reviews.find(review => review.userId === userId && review.spotifyId === albumId);
@@ -168,165 +251,163 @@ const averageRating = averageRatings[item.id];
 console.log(`Rendering album ${item.id} with average rating:`, averageRating); // Debug log
 
 const truncateAlbumName = (name) => {
-    const words = name.split(" ");
-    if (words.length > 3) {
-    return words.slice(0, 3).join(" ") + "...";
-    }
-    return name;
+const words = name.split(" ");
+if (words.length > 3) {
+return words.slice(0, 3).join(" ") + "...";
+}
+return name;
 };
 
 return (
-    <View style={styles.albumRow}>
-    <View style={styles.albumColumn}>
-        <TouchableOpacity onPress={() => handleAlbumPress(item.id)}>
-        <View style={styles.albumContainer}>
-            <Image source={{ uri: item.images[0].url }} style={styles.albumImage} />
-            <View style={styles.albumInfo}>
-            <Text style={styles.albumName}>{truncateAlbumName(item.name)}</Text>
-            <Text style={styles.albumYear}>{item.release_date.split('-')[0]}</Text>
-            </View>
+<View style={styles.albumRow}>
+<View style={styles.albumColumn}>
+    <TouchableOpacity onPress={() => handleAlbumPress(item.id)}>
+    <View style={styles.albumContainer}>
+        <Image source={{ uri: item.images[0].url }} style={styles.albumImage} />
+        <View style={styles.albumInfo}>
+        <Text style={styles.albumName}>{truncateAlbumName(item.name)}</Text>
+        <Text style={styles.albumYear}>{item.release_date.split('-')[0]}</Text>
         </View>
-        </TouchableOpacity>
-        {selectedAlbum === item.id && (
-        <FlatList
-            data={tracks}
-            renderItem={renderTrack}
-            keyExtractor={(item) => item.id}
-            style={styles.trackList}
-        />
-        )}
     </View>
-    <View style={styles.ratingColumn}>
-        {userRating ? (
-        <View style={styles.ratingContainer}>
-            <View style={styles.starPicker}>
-            {[1, 2, 3, 4, 5].map((star) => (
-                <FontAwesome
-                key={star}
-                name="star"
-                size={14}
-                color={star <= userRating ? "yellow" : "gray"}
-                />
-            ))}
-            </View>
+    </TouchableOpacity>
+    {selectedAlbum === item.id && (
+    <FlatList
+        data={tracks}
+        renderItem={renderTrack}
+        keyExtractor={(item) => item.id}
+        style={styles.trackList}
+    />
+    )}
+</View>
+<View style={styles.ratingColumn}>
+    {userRating ? (
+    <View style={styles.ratingContainer}>
+        <View style={styles.starPicker}>
+        {[1, 2, 3, 4, 5].map((star) => (
+            <FontAwesome
+            key={star}
+            name="star"
+            size={14}
+            color={star <= userRating ? "yellow" : "gray"}
+            />
+        ))}
         </View>
-        ) : (
-        <TouchableOpacity style={styles.addButton} onPress={() => { /* Placeholder for future implementation */ }}>
-            <Ionicons name="add-circle-outline" size={24} color="white" />
-        </TouchableOpacity>
-        )}
     </View>
-    <View style={styles.communityRatingColumn}>
-        {averageRating !== undefined && (
-        <Text style={styles.communityRating}>{averageRating ? averageRating.toFixed(1) : "N/A"}</Text>
-        )}
-    </View>
-    </View>
+    ) : (
+    <TouchableOpacity style={styles.addButton} onPress={() => { /* Placeholder for future implementation */ }}>
+        <Ionicons name="add-circle-outline" size={24} color="white" />
+    </TouchableOpacity>
+    )}
+</View>
+<View style={styles.communityRatingColumn}>
+    {averageRating !== undefined && (
+    <Text style={styles.communityRating}>{averageRating ? averageRating.toFixed(1) : "N/A"}</Text>
+    )}
+</View>
+</View>
 );
 };
 
 const renderTrack = ({ item }) => (
 <View style={styles.trackContainer}>
-    <Text style={styles.trackName}>{item.name}</Text>
+<Text style={styles.trackName}>{item.name}</Text>
 </View>
 );
 
 const renderReviewCard = ({ item }) => {
-const album = albums.find((album) => album.id === item.spotifyId);
-const username = usernames[item.userId] || `User ${item.userId}`;
-console.log("Usernames state:", usernames);
-console.log(`Username for userId ${item.userId}:`, usernames[item.userId]);
+    const album = albums.find((album) => album.id === item.spotifyId);
+    const username = usernames[item.userId] || `User ${item.userId}`;
 
-return (
-    <GestureHandlerRootView>
-    <Swipeable overshootRight={false}>
-        <View style={styles.reviewContainer}>
-        <Image source={{ uri: album?.images[0].url }} style={styles.albumImage} />
-        <View style={styles.reviewContent}>
-            <Text style={styles.albumName}>{album?.name}</Text>
-            <View style={styles.starPicker}>
-            {[1, 2, 3, 4, 5].map((star) => (
-                <FontAwesome
-                key={star}
-                name="star"
-                size={14}
-                color={star <= item.rating ? "white" : "gray"}
-                />
-            ))}
-            </View>
-            <Text style={styles.userName}>{username}</Text>
-            <Text style={styles.reviewText}>{item.comment}</Text>
-            <View style={styles.reviewFooter}>
-            <TouchableOpacity onPress={() => toggleLike(item.id)}>
-                <Ionicons 
-                name={likedReviews[item.id] ? "heart" : "heart-outline"} 
-                size={20} 
-                color={likedReviews[item.id] ? "red" : "white"} 
-                />
-            </TouchableOpacity>
-            </View>
-        </View>
-        </View>
-    </Swipeable>
-    </GestureHandlerRootView>
-);
+    return (
+        <GestureHandlerRootView>
+            <Swipeable overshootRight={false}>
+                <View style={styles.reviewContainer}>
+                    <Image source={{ uri: album?.images[0].url }} style={styles.albumImage} />
+                    <View style={styles.reviewContent}>
+                        <Text style={styles.albumName}>{album?.name}</Text>
+                        <View style={styles.starPicker}>
+                            {[1, 2, 3, 4, 5].map((star) => (
+                                <FontAwesome key={star} name="star" size={14} color={star <= item.rating ? "white" : "gray"} />
+                            ))}
+                        </View>
+                        <Text style={styles.userName}>{username}</Text>
+                        <Text style={styles.reviewText}>{item.comment}</Text>
+                        <View style={styles.reviewFooter}>
+                            <TouchableOpacity onPress={() => toggleLike(item.id)}>
+                                <View style={styles.likeContainer}>
+                                    <Ionicons
+                                        name={likedReviews[item.id] ? "heart" : "heart-outline"}
+                                        size={20}
+                                        color={likedReviews[item.id] ? "red" : "white"}
+                                    />
+                                    <Text style={styles.likeText}>
+                                        {likeCounts[item.id] || 0} Likes
+                                    </Text>
+                                </View>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Swipeable>
+        </GestureHandlerRootView>
+    );
 };
 
 const tabs = ["Profile", "Review", "About"];
 
 return (
 <View style={styles.container}>
-    <View style={styles.navBar}>
-    {tabs.map((tab) => (
-        <TouchableOpacity
-        key={tab}
+<View style={styles.navBar}>
+{tabs.map((tab) => (
+    <TouchableOpacity
+    key={tab}
+    style={[
+        styles.navItem,
+        selectedTab === tab && styles.selectedNavItem,
+    ]}
+    onPress={() => setSelectedTab(tab)}
+    >
+    <Text
         style={[
-            styles.navItem,
-            selectedTab === tab && styles.selectedNavItem,
+        styles.navText,
+        selectedTab === tab && styles.selectedNavText,
         ]}
-        onPress={() => setSelectedTab(tab)}
-        >
-        <Text
-            style={[
-            styles.navText,
-            selectedTab === tab && styles.selectedNavText,
-            ]}
-        >
-            {tab}
-        </Text>
-        </TouchableOpacity>
-    ))}
-    </View>
-    <Image source={{ uri: artistImage }} style={styles.coverImage} />
-    <TouchableOpacity style={styles.backButton} onPress={onBack}>
-    <FontAwesome name="arrow-left" size={24} color="white" />
+    >
+        {tab}
+    </Text>
     </TouchableOpacity>
-    <View style={styles.profileContainer}>
-    <Text style={styles.title}>{artistName}</Text>
-    {selectedTab === "Profile" && (
-        <>
-        <View style={styles.headerRow}>
-            <Text style={styles.columnHeader}>Albums/Tracks</Text>
-            <Text style={styles.columnHeader}>Your Rating</Text>
-            <Text style={styles.columnHeader}>Community Rating</Text>
-        </View>
-        <FlatList data={albums} renderItem={renderAlbum} keyExtractor={(item) => item.id} />
-        </>
-    )}
-    {selectedTab === "Review" && (
-        <FlatList
-        data={reviews}
-        keyExtractor={(item) => item.id.toString()}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={fetchReviews} />}
-        renderItem={renderReviewCard}
-        />
-    )}
-    {selectedTab === "About" && (
-        <View style={styles.aboutContainer}>
-        <Text style={styles.aboutText}>About content goes here...</Text>
-        </View>
-    )}
+))}
+</View>
+<Image source={{ uri: artistImage }} style={styles.coverImage} />
+<TouchableOpacity style={styles.backButton} onPress={onBack}>
+<FontAwesome name="arrow-left" size={24} color="white" />
+</TouchableOpacity>
+<View style={styles.profileContainer}>
+<Text style={styles.title}>{artistName}</Text>
+{selectedTab === "Profile" && (
+    <>
+    <View style={styles.headerRow}>
+        <Text style={styles.columnHeader}>Albums/Tracks</Text>
+        <Text style={styles.columnHeader}>Your Rating</Text>
+        <Text style={styles.columnHeader}>Community Rating</Text>
     </View>
+    <FlatList data={albums} renderItem={renderAlbum} keyExtractor={(item) => item.id} />
+    </>
+)}
+{selectedTab === "Review" && (
+    <FlatList
+    data={reviews}
+    keyExtractor={(item) => item.id.toString()}
+    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={fetchReviews} />}
+    renderItem={renderReviewCard}
+    />
+)}
+{selectedTab === "About" && (
+    <View style={styles.aboutContainer}>
+    <Text style={styles.aboutText}>About content goes here...</Text>
+    </View>
+)}
+</View>
 </View>
 );
 }
@@ -496,5 +577,13 @@ marginTop: 10,
 communityRating: {
 color: "yellow",
 fontSize: 14,
+},
+likeContainer: {
+flexDirection: "row",
+alignItems: "center",
+},
+likeText: {
+color: "white",
+marginLeft: 5,
 },
 });

@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_GATEWAY_URL = "http://192.168.1.20:8765";
+const API_GATEWAY_URL = "http://192.168.1.23:8765";
 
 const searchPeople = async (username) => {
   try {
@@ -129,7 +129,9 @@ const likeReview = async (reviewId) => {
 
 const unlikeReview = async (reviewId) => {
   try {
-    const response = await axios.delete(`${API_GATEWAY_URL}/review-like/unlike/${reviewId}`);
+    const response = await axios.delete(`${API_GATEWAY_URL}/review-like/unlike/${reviewId}`, {
+      data: { userId: 4 }
+    });
     return response.data;
   } catch (error) {
     console.error("❌ Error unliking review:", error.response?.data || error.message);
